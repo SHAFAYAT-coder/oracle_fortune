@@ -1,0 +1,2062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sasta AI - Oracle 20 Questions</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        [hidden] { display: none !important; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        header {
+            background-color: #1f1f1f;
+            padding: 15px 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        header h1 { margin: 0; font-size: 1.3rem; color: #ffffff; }
+        header .sub { font-size: 0.8rem; color: #888; display: block; margin-top: 4px; }
+        .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        #game-status { font-size: 0.85rem; color: #f5c542; }
+        .header-btn {
+            background: #2a2a2a; color: #e0e0e0; border: 1px solid #444;
+            padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+            margin: 2px;
+        }
+        .header-btn:hover { background: #333; }
+        .header-btn.on { background: #5b2a86; border-color: #b48cff; }
+        .header-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        #layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+        #scene-wrap {
+            position: relative;
+            height: 42%;
+            min-height: 260px;
+            border-bottom: 1px solid #333;
+            background: #14111c;
+        }
+        #scene { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+        #scene:active { cursor: grabbing; }
+        #scene canvas { display: block; }
+
+        #bubble {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            max-width: 70%;
+            background: rgba(30, 30, 30, 0.92);
+            border: 1px solid #5b2a86;
+            color: #f0e6ff;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            word-wrap: break-word;
+        }
+        #bubble.show { opacity: 1; }
+
+        .scene-label {
+            position: absolute; left: 14px; bottom: 10px;
+            font-size: 0.75rem; letter-spacing: 2px; color: #b48cff; pointer-events: none;
+        }
+        .scene-hint {
+            position: absolute; right: 14px; bottom: 10px;
+            font-size: 0.75rem; color: #777; pointer-events: none;
+        }
+
+        #chat-col { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        #chat-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        .message {
+            max-width: 80%;
+            padding: 14px 18px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        .user-message {
+            background-color: #2b5278; color: #fff;
+            align-self: flex-end; border-bottom-right-radius: 2px;
+        }
+        .ai-message {
+            background-color: #1e1e1e; border: 1px solid #333; color: #e0e0e0;
+            align-self: flex-start; border-bottom-left-radius: 2px;
+        }
+        .painting-img {
+            display: block;
+            max-width: 100%;
+            border-radius: 8px;
+            border: 4px solid #fff;
+        }
+        #input-container {
+            display: flex;
+            padding: 16px 20px;
+            background-color: #121212;
+            width: 100%;
+            max-width: 840px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        #user-input {
+            flex: 1; padding: 14px; background-color: #1e1e1e; border: 1px solid #444;
+            color: #fff; border-radius: 8px; outline: none; font-size: 1rem;
+        }
+        #user-input:focus { border-color: #555; }
+        #mic-btn {
+            background: #2a2a2a; color: #fff; border: 1px solid #444;
+            padding: 0 14px; margin-left: 10px; border-radius: 8px;
+            cursor: pointer; font-size: 1.1rem;
+        }
+        #mic-btn.live { background: #c0392b; border-color: #e74c3c; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        #send-btn {
+            background-color: #ffffff; color: #121212; border: none; padding: 0 24px;
+            margin-left: 10px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem;
+        }
+        #send-btn:hover { background-color: #e0e0e0; }
+
+        /* ---------- Secret chase menu ---------- */
+        #secret-menu {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 3, 12, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 12px;
+        }
+        .sm-box {
+            width: min(960px, 100%);
+            background: #16121f;
+            border: 2px solid #b48cff;
+            border-radius: 14px;
+            padding: 14px;
+            box-shadow: 0 0 30px rgba(180, 140, 255, 0.4);
+        }
+        .sm-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #ffd54a;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+        #sm-view {
+            width: 100%;
+            height: min(60vh, 520px);
+            min-height: 300px;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+        #sm-view canvas { display: block; }
+        #sm-caption {
+            min-height: 30px;
+            margin: 12px 0 6px;
+            text-align: center;
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: #ffd84d;
+        }
+        .sm-help { text-align: center; color: #888; font-size: 0.85rem; }
+        .sm-actions { text-align: center; margin-top: 10px; }
+
+        @media (min-width: 900px) {
+            #layout { flex-direction: row; }
+            #scene-wrap {
+                flex: 1.4;
+                height: auto;
+                min-height: 0;
+                border-bottom: none;
+                border-right: 1px solid #333;
+            }
+            #chat-col { flex: 1; min-width: 360px; max-width: 480px; }
+            #chat-container { max-width: none; }
+            #input-container { max-width: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Sasta AI ⚡</h1>
+            <span class="sub">Budget build, premium brain powered by Groq</span>
+        </div>
+        <div class="header-right">
+            <div id="game-status">Free chat mode</div>
+            <div>
+                <button class="header-btn" onclick="startGame()">🎲 New 20 Questions</button>
+                <button class="header-btn" id="mind-btn" onclick="mindRead()">🔮 Mind Read (-2 Q)</button>
+                <button class="header-btn" onclick="startFreeChat()">💬 Free Chat</button>
+                <button class="header-btn" onclick="danceNow()">💃 Dance</button>
+                <button class="header-btn" onclick="funnyDance()">🤖 Funny Dance</button>
+                <button class="header-btn" onclick="magicTrick()">🎩 Magic</button>
+                <button class="header-btn" onclick="makePicture()">🎨 Paint</button>
+                <button class="header-btn" id="save-pic-btn" onclick="savePicture()" hidden>💾 Save Picture</button>
+                <button class="header-btn" id="door-btn" onclick="toggleDoor()">🚪 Go Out</button>
+                <button class="header-btn" id="sit-btn" onclick="toggleSit()">🪑 Sit</button>
+                <button class="header-btn" id="lang-btn" onclick="toggleLang()">🌐 বাংলা</button>
+                <button class="header-btn on" id="voice-btn" onclick="toggleVoice()">🔊 Voice On</button>
+            </div>
+        </div>
+    </header>
+
+    <main id="layout">
+        <section id="scene-wrap">
+            <div id="scene"></div>
+            <div id="bubble"></div>
+            <div class="scene-label">THE ORACLE</div>
+            <div class="scene-hint">Drag to look around · Scroll to zoom</div>
+        </section>
+
+        <section id="chat-col">
+            <div id="chat-container">
+                <div class="message ai-message">Greetings, Master! Sasta is online. Want to play 20 Questions? Hit "New 20 Questions" above, or just chat with me freely. Click the mic to talk to me. Type "dance" or "funny dance" to see my moves. Say "go out" for the garden, "sit" to rest on the bench, "stand up" to rise, and "come in" to go back inside. Say "I'm bored" to see a magic trick. Say "make a picture" and I will paint one for you. Press 🌐 to speak Bengali.</div>
+            </div>
+            <div id="input-container">
+                <input type="text" id="user-input" placeholder="Ask a yes/no question, or type 'guess: ...'" autofocus>
+                <button id="mic-btn" title="Speak your question" onclick="toggleMic()">🎤</button>
+                <button id="send-btn" onclick="handleUserMessage()">Send</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Secret menu (opened by typing the secret code, no button) -->
+    <div id="secret-menu" hidden>
+        <div class="sm-box">
+            <div class="sm-head">
+                <span>🔓 Secret Chase</span>
+                <button class="header-btn" onclick="closeSecretMenu()">✖ Close</button>
+            </div>
+            <div id="sm-view"></div>
+            <div id="sm-caption"></div>
+            <div class="sm-help">A / D or ← → to swerve · Space for a magic boost · Esc to close</div>
+            <div class="sm-actions">
+                <button class="header-btn" id="sm-replay" hidden onclick="replayChase()">▶ Replay</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================== CONFIG ==================
+        // The Groq key lives on the server (.env), not in this file.
+        const MAX_QUESTIONS = 20;
+        const MIND_READ_COST = 2;
+        const SECRET_CODE = "1234";
+
+        const SECRETS = [
+            "a banana", "a cricket bat", "the Eiffel Tower", "a rickshaw",
+            "a cup of tea", "a mobile phone", "a tiger", "a monsoon cloud",
+            "a football", "a laptop", "a mango", "a bicycle", "a hilsa fish",
+            "a cricket ball", "a Rubik's cube", "the Sun", "a pizza",
+            "an umbrella", "a pillow", "a crocodile", "a bus", "a mosque dome",
+            "a kite", "a chess board", "a guitar"
+        ];
+
+        // Phrases that control movement
+        const OUT_WORDS = ['go out', 'go outside', 'come out', 'বাইরে যাও', 'বাইরে এসো'];
+        const IN_WORDS = ['go in', 'come in', 'go inside', 'come back', 'ভেতরে যাও', 'ভেতরে এসো', 'ঘরে ফিরে'];
+        const SIT_WORDS = ['sit', 'sit down', 'sit on the bench', 'বসো', 'বসে পড়ো', 'বেঞ্চে বসো'];
+        const STAND_WORDS = ['stand up', 'get up', 'উঠে দাঁড়াও', 'উঠে পড়ো'];
+
+        // Phrases that trigger the magic trick
+        const MAGIC_WORDS = ['bored', 'i am bored', 'magic', 'বিরক্ত', 'বিরক্ত লাগছে'];
+
+        // Phrases that make the oracle paint a picture
+        const PAINT_WORDS = ['make a picture', 'make picture', 'paint a picture', 'draw a picture', 'ছবি আঁকো', 'ছবি বানাও'];
+
+        // Story beats for the secret chase (time in seconds)
+        const CHASE_STAGES = [
+            { at: 0,  en: "🎩 Magic orb charged! Catch me if you can!", bn: "🎩 জাদুর গোলক চার্জ! ধরতে পারলে ধরো!" },
+            { at: 5,  en: "🚨 Sirens behind us!", bn: "🚨 পেছনে সাইরেন!" },
+            { at: 11, en: "🔮 Hold on to your hat!", bn: "🔮 টুপি শক্ত করে ধরো!" },
+            { at: 17, en: "🌀 Left... right... the road is ours!", bn: "🌀 বাঁয়ে... ডানে... রাস্তা আমাদের!" },
+            { at: 23, en: "✨ Escaped! The police are lost in the fog.", bn: "✨ পালিয়েছি! পুলিশ কুয়াশায় হারিয়ে গেছে।", end: true }
+        ];
+
+        // Matches English phrases as whole words (so "sit" does not match "visit"),
+        // and Bengali phrases as plain substrings.
+        function hasPhrase(low, text, phrases) {
+            return phrases.some(p => /^[a-z ]+$/.test(p)
+                ? new RegExp('\\b' + p + '\\b').test(low)
+                : text.includes(p));
+        }
+
+        // ================== LANGUAGE ==================
+        let lang = 'en'; // 'en' or 'bn'
+        function isBn() { return lang === 'bn'; }
+        function T(en, bn) { return isBn() ? bn : en; }
+
+        function freeChatSystem() {
+            return isBn()
+                ? "You are Sasta, a helpful, friendly assistant. Always reply in Bengali (বাংলা script), unless the user clearly writes in English. Keep answers clear and concise."
+                : "You are Sasta, a helpful, friendly assistant. Keep answers clear and concise.";
+        }
+
+        // ================== APP STATE ==================
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const statusEl = document.getElementById('game-status');
+        const sceneEl = document.getElementById('scene');
+        const bubbleEl = document.getElementById('bubble');
+        const voiceBtn = document.getElementById('voice-btn');
+        const langBtn = document.getElementById('lang-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const doorBtn = document.getElementById('door-btn');
+        const sitBtn = document.getElementById('sit-btn');
+        const savePicBtn = document.getElementById('save-pic-btn');
+        const secretEl = document.getElementById('secret-menu');
+        const smCaption = document.getElementById('sm-caption');
+        const smReplay = document.getElementById('sm-replay');
+
+        let chatHistory = [];
+        let game = null; // { secret, left, history, over }
+        let busy = false;
+        let voiceOn = true;
+        let voiceSpeaking = false;
+
+        // Secret chase state (declared early because animate() runs during setup)
+        let secretOpen = false;
+        const secretKeys = {};
+        const chase = {
+            scene: null, camera: null, car: null, police: [], dashes: [], buildings: [],
+            t: 0, off: 0, laneOff: 0, prevX: 0, boost: 0, curSpeed: 26, stage: -1, finished: false
+        };
+
+        userInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') handleUserMessage();
+        });
+
+        // ================== LANGUAGE TOGGLE ==================
+        function toggleLang() {
+            lang = isBn() ? 'en' : 'bn';
+            langBtn.textContent = isBn() ? '🌐 English' : '🌐 বাংলা';
+            langBtn.classList.toggle('on', isBn());
+            userInput.placeholder = isBn()
+                ? "হ্যাঁ/না প্রশ্ন করো, অথবা 'অনুমান: ...' লেখো"
+                : "Ask a yes/no question, or type 'guess: ...'";
+            if (recognizer) recognizer.lang = isBn() ? 'bn-BD' : 'en-US';
+            updateDoorBtn();
+            updateSitBtn();
+
+            if (isBn() && !hasBengaliVoice()) {
+                appendMessage("⚠️ এই ডিভাইসে কোনো বাংলা ভয়েস পাওয়া যায়নি। বাংলা লেখা দেখা যাবে, কিন্তু কথা বলার জন্য সিস্টেম সেটিংসে বাংলা ভয়েস যোগ করো।", 'ai-message');
+            }
+            appendMessage(T("Language set to English.", "ভাষা এখন বাংলা।"), 'ai-message');
+            npcSpeak(T("Now I shall speak in English.", "এখন থেকে আমি বাংলায় কথা বলব।"));
+            updateStatus();
+        }
+
+        // ================== VOICE OUTPUT (the oracle speaks) ==================
+        let voices = [];
+        function loadVoices() { voices = window.speechSynthesis ? speechSynthesis.getVoices() : []; }
+        if (window.speechSynthesis) {
+            loadVoices();
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function hasBengaliVoice() {
+            return voices.some(v => /^bn/i.test(v.lang) || /bengali|bangla/i.test(v.name));
+        }
+
+        function pickVoice() {
+            if (isBn()) {
+                return voices.find(v => /^bn/i.test(v.lang))
+                    || voices.find(v => /bengali|bangla/i.test(v.name))
+                    || null;
+            }
+            return voices.find(v => /male|daniel|george|david|google uk english male/i.test(v.name))
+                || voices.find(v => /^en/i.test(v.lang))
+                || null;
+        }
+
+        function speakAloud(text) {
+            if (!voiceOn || !window.speechSynthesis) return;
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text.replace('[CORRECT]', ''));
+            const v = pickVoice();
+            if (v) u.voice = v;
+            u.lang = isBn() ? 'bn-BD' : 'en-US';
+            u.pitch = isBn() ? 0.8 : 0.55;  // deep oracle voice (a bit higher for Bengali)
+            u.rate = isBn() ? 0.85 : 0.9;
+            u.volume = 1;
+            u.onstart = () => { voiceSpeaking = true; };
+            u.onend = () => { voiceSpeaking = false; };
+            u.onerror = () => { voiceSpeaking = false; };
+            speechSynthesis.speak(u);
+        }
+
+        function toggleVoice() {
+            voiceOn = !voiceOn;
+            voiceBtn.textContent = voiceOn ? '🔊 Voice On' : '🔇 Voice Off';
+            voiceBtn.classList.toggle('on', voiceOn);
+            if (!voiceOn && window.speechSynthesis) speechSynthesis.cancel();
+        }
+
+        // ================== VOICE INPUT (you speak to the oracle) ==================
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognizer = null;
+        let listening = false;
+
+        if (SpeechRec) {
+            recognizer = new SpeechRec();
+            recognizer.lang = 'en-US';
+            recognizer.interimResults = false;
+            recognizer.maxAlternatives = 1;
+            recognizer.onresult = e => {
+                const said = e.results[0][0].transcript;
+                userInput.value = said;
+                handleUserMessage();
+            };
+            recognizer.onend = () => {
+                listening = false;
+                micBtn.classList.remove('live');
+            };
+            recognizer.onerror = () => {
+                listening = false;
+                micBtn.classList.remove('live');
+            };
+        } else {
+            micBtn.hidden = true;
+        }
+
+        function toggleMic() {
+            if (!recognizer) return;
+            if (listening) {
+                recognizer.stop();
+                return;
+            }
+            listening = true;
+            micBtn.classList.add('live');
+            try {
+                recognizer.start();
+            } catch (e) {
+                listening = false;
+                micBtn.classList.remove('live');
+            }
+        }
+
+        // ================== 3D SCENE ==================
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        sceneEl.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x14111c);
+        scene.fog = new THREE.Fog(0x14111c, 22, 60);
+
+        const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 150);
+
+        // Camera orbit. The focus point follows the oracle around.
+        const orbit = { theta: 0, phi: 1.05, radius: 8.5 };
+        const focus = new THREE.Vector3(0, 1.2, -3);
+        const focusGoal = new THREE.Vector3();
+
+        function updateCamera() {
+            focusGoal.set(npcPos.x, 1.2, npcPos.z);
+            focus.lerp(focusGoal, 0.08);
+            const { theta, phi, radius } = orbit;
+            camera.position.set(
+                focus.x + radius * Math.sin(phi) * Math.sin(theta),
+                focus.y + radius * Math.cos(phi),
+                focus.z + radius * Math.sin(phi) * Math.cos(theta)
+            );
+            camera.lookAt(focus);
+        }
+
+        // Drag to orbit, scroll to zoom
+        let dragging = false, lastX = 0, lastY = 0;
+        sceneEl.addEventListener('pointerdown', e => {
+            dragging = true; lastX = e.clientX; lastY = e.clientY;
+            sceneEl.setPointerCapture(e.pointerId);
+        });
+        sceneEl.addEventListener('pointermove', e => {
+            if (!dragging) return;
+            orbit.theta = Math.max(-1.2, Math.min(1.2, orbit.theta - (e.clientX - lastX) * 0.005));
+            orbit.phi = Math.max(0.5, Math.min(1.45, orbit.phi - (e.clientY - lastY) * 0.004));
+            lastX = e.clientX; lastY = e.clientY;
+        });
+        sceneEl.addEventListener('pointerup', () => dragging = false);
+        sceneEl.addEventListener('pointercancel', () => dragging = false);
+        sceneEl.addEventListener('wheel', e => {
+            e.preventDefault();
+            orbit.radius = Math.max(4, Math.min(16, orbit.radius + e.deltaY * 0.005));
+        }, { passive: false });
+
+        function mat(color, opts = {}) {
+            return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: 0.85, metalness: 0.05 }, opts));
+        }
+
+        function addBox(w, h, d, color, x, y, z, opts = {}) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, opts));
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            m.receiveShadow = true;
+            scene.add(m);
+            return m;
+        }
+
+        function addCylinder(rTop, rBottom, h, color, x, y, z, seg = 16) {
+            const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, seg), mat(color));
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            m.receiveShadow = true;
+            scene.add(m);
+            return m;
+        }
+
+        // ---- Lights ----
+        scene.add(new THREE.AmbientLight(0x4a4a6a, 0.7));
+
+        const sun = new THREE.DirectionalLight(0xfff0dd, 0.5);
+        sun.position.set(3, 6, 4);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.left = -12; sun.shadow.camera.right = 12;
+        sun.shadow.camera.top = 12; sun.shadow.camera.bottom = -12;
+        scene.add(sun);
+
+        const ceilingGlow = new THREE.PointLight(0xffc27a, 1.0, 9);
+        ceilingGlow.position.set(0, 2.6, -3);
+        scene.add(ceilingGlow);
+
+        const moonGlow = new THREE.PointLight(0x8fb4ff, 0.6, 7);
+        moonGlow.position.set(-1.8, 2.0, -5);
+        scene.add(moonGlow);
+
+        // ---- Room ----
+        addBox(8, 0.2, 6, 0x6b4a2f, 0, -0.1, -3);                 // floor
+        addBox(8, 3.2, 0.2, 0x3b3a57, 0, 1.6, -6.1);              // back wall
+        addBox(0.2, 3.2, 6, 0x3b3a57, -4.1, 1.6, -3);             // left wall
+
+        // Right wall with an open doorway at z = -2.5 (the oracle walks through it)
+        addBox(0.2, 3.2, 3, 0x3b3a57, 4.1, 1.6, -4.5);            // part before the door
+        addBox(0.2, 3.2, 2, 0x3b3a57, 4.1, 1.6, -1);              // part after the door
+        addBox(0.2, 1.1, 1, 0x3b3a57, 4.1, 2.65, -2.5);           // lintel above the door
+        addBox(0.24, 2.1, 0.12, 0x5a3a20, 4.1, 1.05, -3.05);      // door frame
+        addBox(0.24, 2.1, 0.12, 0x5a3a20, 4.1, 1.05, -1.95);      // door frame
+
+        // Window with moonlight on back wall
+        addBox(1.7, 1.5, 0.1, 0x2a2440, -1.8, 1.9, -6.0);
+        const glass = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.3, 1.1),
+            new THREE.MeshBasicMaterial({ color: 0x8fb4ff })
+        );
+        glass.position.set(-1.8, 1.9, -5.93);
+        scene.add(glass);
+
+        // Painting on left wall
+        addBox(0.05, 0.9, 1.2, 0xc0832b, -4.0, 1.9, -2.5);
+        addBox(0.06, 0.6, 0.9, 0x3c6e47, -3.97, 1.9, -2.5);
+
+        // Rug
+        const rug = new THREE.Mesh(
+            new THREE.CircleGeometry(2.2, 48),
+            mat(0x7a2f3f, { roughness: 1 })
+        );
+        rug.rotation.x = -Math.PI / 2;
+        rug.position.set(0, 0.01, -3);
+        rug.receiveShadow = true;
+        scene.add(rug);
+
+        // Sofa
+        const sofaColor = 0x2e5e7a;
+        addBox(2.2, 0.5, 0.9, sofaColor, -2.2, 0.25, -4.4);
+        addBox(2.2, 0.8, 0.25, sofaColor, -2.2, 0.65, -4.85);
+        addBox(0.2, 0.6, 0.9, sofaColor, -3.3, 0.55, -4.4);
+        addBox(0.2, 0.6, 0.9, sofaColor, -1.1, 0.55, -4.4);
+
+        // Coffee table with crystal ball
+        const tableX = 0.2, tableZ = -3.2;
+        addBox(1.3, 0.08, 0.7, 0x8a5a32, tableX, 0.5, tableZ);
+        [[-0.55, -0.27], [0.55, -0.27], [-0.55, 0.27], [0.55, 0.27]].forEach(([dx, dz]) => {
+            addBox(0.07, 0.46, 0.07, 0x6a4424, tableX + dx, 0.23, tableZ + dz);
+        });
+        const crystalBall = new THREE.Mesh(
+            new THREE.SphereGeometry(0.14, 24, 24),
+            mat(0x2a1a44, { roughness: 0.1, metalness: 0.2, emissive: 0x6a3fb0, emissiveIntensity: 0.9 })
+        );
+        crystalBall.position.set(tableX, 0.7, tableZ);
+        scene.add(crystalBall);
+
+        // Floor lamp near sofa
+        addCylinder(0.04, 0.04, 2.0, 0x222222, -3.5, 1.0, -5.2, 8);
+        addCylinder(0.22, 0.32, 0.4, 0xf2e2b8, -3.5, 2.15, -5.2, 20);
+        const lampLight = new THREE.PointLight(0xffb866, 1.2, 8);
+        lampLight.position.set(-3.5, 2.0, -5.2);
+        scene.add(lampLight);
+
+        // Bookshelf with books
+        addBox(1.4, 2.2, 0.4, 0x5b3b22, 3.2, 1.1, -5.8);
+        const bookColors = [0xaa3333, 0x3366aa, 0x33aa66, 0xccaa33, 0x8844aa];
+        for (let shelf = 0; shelf < 4; shelf++) {
+            for (let b = 0; b < 5; b++) {
+                addBox(0.2, 0.36, 0.25, bookColors[(shelf + b) % bookColors.length],
+                    3.2 - 0.5 + b * 0.25, 0.4 + shelf * 0.5, -5.55);
+            }
+        }
+
+        // Plant
+        addCylinder(0.22, 0.16, 0.4, 0x9a5a3a, 2.8, 0.2, -1.2);
+        const leaves = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 16), mat(0x2f7a3f));
+        leaves.position.set(2.8, 0.85, -1.2);
+        leaves.castShadow = true;
+        scene.add(leaves);
+
+        // ---- Easel and painting canvas (the oracle paints here) ----
+        const EASEL_SPOT = { x: -1.6, z: -2.0 };     // where the oracle stands to paint
+        const easel = new THREE.Group();
+        easel.position.set(-2.6, 0, -1.7);
+        scene.add(easel);
+
+        const woodMat = mat(0x7a5230, { roughness: 0.8 });
+        [[-0.45, 0.12], [0.45, -0.12]].forEach(([x, tilt]) => {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), woodMat);
+            leg.position.set(x, 1.1, -0.25);
+            leg.rotation.x = 0.18;
+            leg.castShadow = true;
+            easel.add(leg);
+        });
+        const frontLeg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.2, 0.08), woodMat);
+        frontLeg.position.set(0, 1.1, 0.1);
+        frontLeg.castShadow = true;
+        easel.add(frontLeg);
+
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(1.56, 1.2, 0.05), woodMat);
+        frame.position.set(0, 1.55, 0.02);
+        frame.castShadow = true;
+        easel.add(frame);
+
+        const paintCanvas = document.createElement('canvas');
+        paintCanvas.width = 512;
+        paintCanvas.height = 384;
+        const paintCtx = paintCanvas.getContext('2d');
+        paintCtx.fillStyle = '#f7f1e3';
+        paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+        const paintTex = new THREE.CanvasTexture(paintCanvas);
+        const paintBoard = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.4, 1.05),
+            new THREE.MeshStandardMaterial({ map: paintTex, roughness: 0.9 })
+        );
+        paintBoard.position.set(0, 1.55, 0.06);
+        easel.add(paintBoard);
+
+        // ---- Garden outside the doorway ----
+        function buildGarden() {
+            // Lawn (sits just under the house floor)
+            const lawn = new THREE.Mesh(
+                new THREE.PlaneGeometry(60, 60),
+                mat(0x3f8f4a, { roughness: 1 })
+            );
+            lawn.rotation.x = -Math.PI / 2;
+            lawn.position.set(14, -0.13, -3);
+            lawn.receiveShadow = true;
+            scene.add(lawn);
+
+            // Stepping stones from the doorway into the garden
+            for (let i = 0; i < 7; i++) {
+                const stone = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.45, 0.5, 0.06, 12),
+                    mat(0xb9b2a2, { roughness: 0.9 })
+                );
+                stone.position.set(4.8 + i * 0.85, 0.03, -2.5 + Math.sin(i) * 0.15);
+                stone.receiveShadow = true;
+                scene.add(stone);
+            }
+
+            // Flowers scattered across the lawn (keeping the path clear)
+            const flowerColors = [0xff6b9a, 0xffd166, 0xc77dff, 0xff9f1c, 0xf72585, 0xffffff];
+            const stemMat = mat(0x2f6b2f, { roughness: 0.9 });
+            for (let i = 0; i < 45; i++) {
+                const x = 4.8 + Math.random() * 13;
+                const z = -11 + Math.random() * 14;
+                if (x < 10.5 && Math.abs(z + 2.5) < 1.0) continue;
+                const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6), stemMat);
+                stem.position.set(x, 0.2, z);
+                scene.add(stem);
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.1, 8, 8),
+                    mat(flowerColors[i % flowerColors.length], { roughness: 0.6 })
+                );
+                head.position.set(x, 0.45, z);
+                scene.add(head);
+            }
+
+            // Trees
+            const trunkMat = mat(0x6b4a2a);
+            const canopyMat = mat(0x2f7a3a);
+            [[7, -8], [13, -10], [17, -5], [17, 2], [9, 3], [6, -10], [15, -1]].forEach(([x, z]) => {
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 1.8, 8), trunkMat);
+                trunk.position.set(x, 0.9, z);
+                trunk.castShadow = true;
+                scene.add(trunk);
+                const canopy = new THREE.Mesh(
+                    new THREE.SphereGeometry(1.1 + Math.random() * 0.3, 14, 12),
+                    canopyMat
+                );
+                canopy.position.set(x, 2.4, z);
+                canopy.castShadow = true;
+                scene.add(canopy);
+            });
+
+            // Hedge along the back and right edges of the garden
+            const hedgeMat = mat(0x1f5a2a, { roughness: 0.9 });
+            for (let x = 5; x <= 19; x += 1.2) {
+                const h = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), hedgeMat);
+                h.position.set(x, 0.5, -12);
+                h.castShadow = true;
+                scene.add(h);
+            }
+            for (let z = -11; z <= 4; z += 1.2) {
+                const h = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), hedgeMat);
+                h.position.set(19, 0.5, z);
+                h.castShadow = true;
+                scene.add(h);
+            }
+
+            // Fountain
+            const fx = 13, fz = -6;
+            addCylinder(1.3, 1.4, 0.4, 0x8e8a84, fx, 0.2, fz, 24);
+            const water = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.15, 1.15, 0.05, 24),
+                new THREE.MeshStandardMaterial({ color: 0x4fb3e8, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.85 })
+            );
+            water.position.set(fx, 0.42, fz);
+            scene.add(water);
+            addCylinder(0.15, 0.2, 1.2, 0x9b968f, fx, 1.0, fz, 12);
+            const fountainTop = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), mat(0x9b968f));
+            fountainTop.position.set(fx, 1.7, fz);
+            fountainTop.castShadow = true;
+            scene.add(fountainTop);
+
+            // Bench (the oracle sits on the seat at z = -5.7, facing the camera)
+            addBox(2, 0.12, 0.6, 0x7a4e2d, 9, 0.5, -6);              // seat
+            addBox(2, 0.6, 0.1, 0x7a4e2d, 9, 0.85, -6.27);           // back
+            [[-0.85, -0.22], [0.85, -0.22], [-0.85, 0.22], [0.85, 0.22]].forEach(([dx, dz]) => {
+                addBox(0.1, 0.46, 0.1, 0x5a3a20, 9 + dx, 0.23, -6 + dz);
+            });
+
+            // Lanterns with warm light
+            [[6, -7], [15, -1]].forEach(([x, z]) => {
+                addCylinder(0.05, 0.05, 1.8, 0x222222, x, 0.9, z, 8);
+                const glow = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: 0xffd27a })
+                );
+                glow.position.set(x, 1.9, z);
+                scene.add(glow);
+                const light = new THREE.PointLight(0xffb866, 1.0, 7);
+                light.position.set(x, 1.9, z);
+                scene.add(light);
+            });
+
+            // Moon in the night sky
+            const moon = new THREE.Mesh(
+                new THREE.SphereGeometry(2.5, 24, 24),
+                new THREE.MeshBasicMaterial({ color: 0xfff6d5 })
+            );
+            moon.position.set(18, 28, -40);
+            scene.add(moon);
+        }
+        buildGarden();
+
+        // ---- The Oracle NPC (powered up) ----
+        const npc = new THREE.Group();
+        npc.position.set(0, 0.15, -3);
+        npc.scale.setScalar(1.25);
+        scene.add(npc);
+
+        // Robe body
+        const robe = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.38, 0.6, 1.7, 24),
+            mat(0x5b2a86, { roughness: 0.6 })
+        );
+        robe.position.y = 0.85;
+        robe.castShadow = true;
+        npc.add(robe);
+
+        // Head group (pivot at neck)
+        const headGroup = new THREE.Group();
+        headGroup.position.y = 2.0;
+        npc.add(headGroup);
+
+        const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 24), mat(0xd9b08c));
+        headMesh.castShadow = true;
+        headGroup.add(headMesh);
+
+        // Wizard hat
+        const hatCone = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 24), mat(0x3d1c5c));
+        hatCone.position.y = 0.5;
+        hatCone.castShadow = true;
+        headGroup.add(hatCone);
+        const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 24), mat(0x3d1c5c));
+        hatBrim.position.y = 0.2;
+        headGroup.add(hatBrim);
+        const hatStar = new THREE.Mesh(
+            new THREE.SphereGeometry(0.05, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffd54a })
+        );
+        hatStar.position.set(0, 0.62, 0.1);
+        headGroup.add(hatStar);
+
+        // Beard
+        const beard = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.1), mat(0xdddddd));
+        beard.position.set(0, -0.16, 0.18);
+        headGroup.add(beard);
+
+        // Glowing eyes
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x7ff5ff });
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 12), eyeMat);
+        const eyeR = eyeL.clone();
+        eyeL.position.set(-0.1, 0.04, 0.25);
+        eyeR.position.set(0.1, 0.04, 0.25);
+        headGroup.add(eyeL, eyeR);
+
+        // Mouth
+        const mouth = new THREE.Mesh(
+            new THREE.BoxGeometry(0.12, 0.025, 0.02),
+            new THREE.MeshBasicMaterial({ color: 0x2a0f0f })
+        );
+        mouth.position.set(0, -0.07, 0.27);
+        headGroup.add(mouth);
+
+        // Arms (pivot at shoulder)
+        const robeSleeve = 0x4a2270;
+        const leftArm = new THREE.Group();
+        leftArm.position.set(-0.45, 1.6, 0);
+        npc.add(leftArm);
+        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.8, 0.16), mat(robeSleeve));
+        leftArmMesh.position.y = -0.4;
+        leftArmMesh.castShadow = true;
+        leftArm.add(leftArmMesh);
+
+        const rightArm = new THREE.Group();
+        rightArm.position.set(0.45, 1.6, 0);
+        npc.add(rightArm);
+        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.8, 0.16), mat(robeSleeve));
+        rightArmMesh.position.y = -0.4;
+        rightArmMesh.castShadow = true;
+        rightArm.add(rightArmMesh);
+
+        // Floating orb
+        const orbMat = new THREE.MeshBasicMaterial({ color: 0x7ff5ff });
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 20, 20), orbMat);
+        orb.position.set(0.95, 1.55, 0.35);
+        npc.add(orb);
+        const orbLight = new THREE.PointLight(0x7ff5ff, 0.6, 3);
+        orb.add(orbLight);
+
+        // Sparkles for the magic trick (hidden until used)
+        const sparkles = [];
+        const sparkColors = [0xffe066, 0xffffff, 0xff8fd8, 0x7ff5ff];
+        for (let i = 0; i < 22; i++) {
+            const mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05, 6, 6),
+                new THREE.MeshBasicMaterial({ color: sparkColors[i % sparkColors.length] })
+            );
+            mesh.visible = false;
+            npc.add(mesh);
+            sparkles.push({ mesh, vel: new THREE.Vector3(), life: 0 });
+        }
+
+        // Power aura ring on the floor
+        const auraMat = new THREE.MeshBasicMaterial({ color: 0x7ff5ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+        const aura = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.2, 48), auraMat);
+        aura.rotation.x = -Math.PI / 2;
+        aura.position.y = -0.12;
+        npc.add(aura);
+
+        // Lightning bolts around the oracle
+        const bolts = [];
+        for (let i = 0; i < 5; i++) {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
+            const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xbff7ff }));
+            line.visible = false;
+            npc.add(line);
+            bolts.push(line);
+        }
+        let lastBoltT = 0;
+
+        function jitterBolts() {
+            bolts.forEach(line => {
+                const p = line.geometry.attributes.position.array;
+                const ang = Math.random() * Math.PI * 2;
+                const r = 0.9 + Math.random() * 0.5;
+                for (let j = 0; j < 8; j++) {
+                    const f = j / 7;
+                    const jitter = (1 - f) * 0.2 + 0.05;
+                    p[j * 3]     = Math.cos(ang) * r * f + (Math.random() - 0.5) * jitter;
+                    p[j * 3 + 1] = 0.3 + f * 1.8 + (Math.random() - 0.5) * jitter;
+                    p[j * 3 + 2] = Math.sin(ang) * r * f + (Math.random() - 0.5) * jitter;
+                }
+                line.geometry.attributes.position.needsUpdate = true;
+            });
+        }
+
+        // ---- Speech bubble, mood and dance state ----
+        let talkUntil = 0;
+        let winUntil = 0;
+        let danceUntil = 0;
+        let funnyUntil = 0;
+        const clock = new THREE.Clock();
+        const MOOD_COLORS = {
+            idle: new THREE.Color(0x7ff5ff),
+            thinking: new THREE.Color(0xb36bff),
+            win: new THREE.Color(0xffd54a)
+        };
+        const orbTarget = new THREE.Vector3();
+        let bubbleTimer = null;
+
+        // ---- Magic trick state ----
+        const MAGIC_LEN = 4.0;          // total seconds for the whole trick
+        const HAT_POS = new THREE.Vector3(0, 2.85, 0); // top of the hat, in oracle space
+        let magicStart = -999;
+        let magicBurstDone = false;
+
+        function magicTrick() {
+            const now = clock.getElapsedTime();
+            if (now - magicStart < MAGIC_LEN) return;   // already performing
+            magicStart = now;
+            magicBurstDone = false;
+            appendMessage(T('🎩 The oracle performs a magic trick!', '🎩 ভবিষ্যদ্বক্তা একটা জাদু দেখালেন!'), 'ai-message');
+            npcSpeak(T("Ta-da! Your boredom has vanished!", "দেখো! তোমার বিরক্তি উধাও!"));
+        }
+
+        function burstSparkles() {
+            sparkles.forEach(s => {
+                s.mesh.position.set(HAT_POS.x, HAT_POS.y, HAT_POS.z);
+                s.vel.set((Math.random() - 0.5) * 2.5, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 2.5);
+                s.life = 0.9;
+                s.mesh.visible = true;
+            });
+        }
+
+        // ---- Painting state ----
+        const PAINT_LEN = 6;            // seconds the painting takes
+        const paint = { active: false, start: 0, plan: [], next: 0, picture: false };
+
+        // Each step draws one part of the picture at a set time
+        function buildPaintPlan() {
+            const W = paintCanvas.width, H = paintCanvas.height;
+            const stars = [];
+            for (let i = 0; i < 40; i++) {
+                stars.push({ x: Math.random() * W, y: Math.random() * H * 0.5 });
+            }
+            const plan = [
+                { t: 0.0, draw: c => {
+                    const g = c.createLinearGradient(0, 0, 0, H);
+                    g.addColorStop(0, '#1b1040');
+                    g.addColorStop(1, '#5a2d82');
+                    c.fillStyle = g;
+                    c.fillRect(0, 0, W, H);
+                } },
+                { t: 0.8, draw: c => {
+                    c.save();
+                    c.shadowColor = '#fff6d5';
+                    c.shadowBlur = 30;
+                    c.fillStyle = '#fff6d5';
+                    c.beginPath();
+                    c.arc(W * 0.75, H * 0.25, 38, 0, Math.PI * 2);
+                    c.fill();
+                    c.restore();
+                } }
+            ];
+            stars.forEach((s, i) => {
+                plan.push({ t: 1.2 + i * 0.05, draw: c => {
+                    c.fillStyle = '#ffffff';
+                    c.fillRect(s.x, s.y, 2.5, 2.5);
+                } });
+            });
+            plan.push({ t: 3.2, draw: c => {
+                c.fillStyle = '#1e5a3a';
+                c.beginPath();
+                c.moveTo(0, H);
+                c.quadraticCurveTo(W * 0.3, H * 0.55, W * 0.6, H * 0.75);
+                c.quadraticCurveTo(W * 0.85, H * 0.6, W, H * 0.7);
+                c.lineTo(W, H);
+                c.closePath();
+                c.fill();
+            } });
+            plan.push({ t: 4.0, draw: c => {
+                // Little house with a lit window
+                c.fillStyle = '#3b2a3f';
+                c.fillRect(W * 0.15, H * 0.6, 90, 70);
+                c.fillStyle = '#7a2f3f';
+                c.beginPath();
+                c.moveTo(W * 0.15 - 10, H * 0.6);
+                c.lineTo(W * 0.15 + 45, H * 0.45);
+                c.lineTo(W * 0.15 + 100, H * 0.6);
+                c.closePath();
+                c.fill();
+                c.fillStyle = '#ffd27a';
+                c.fillRect(W * 0.15 + 30, H * 0.66, 26, 22);
+            } });
+            plan.push({ t: 4.8, draw: c => {
+                // Round tree with a trunk
+                c.fillStyle = '#5b3a1e';
+                c.fillRect(W * 0.5, H * 0.62, 12, 60);
+                c.fillStyle = '#2f7a3a';
+                c.beginPath();
+                c.arc(W * 0.5 + 6, H * 0.55, 42, 0, Math.PI * 2);
+                c.fill();
+            } });
+            plan.push({ t: 5.5, draw: c => {
+                c.font = 'italic 18px Georgia, serif';
+                c.fillStyle = '#ffd54a';
+                c.fillText('— Sasta', W - 120, H - 16);
+            } });
+            return plan;
+        }
+
+        function makePicture() {
+            if (walking || paint.active) return;
+            if (secretOpen) return;
+            seated = false;
+            updateSitBtn();
+
+            // Walk through the door first if he is outside
+            const path = [];
+            if (outside) {
+                outside = false;
+                path.push(...IN_PATH);
+                updateDoorBtn();
+            }
+            path.push(EASEL_SPOT);
+
+            appendMessage(T('🎨 The oracle takes up his brush and walks to the easel.', '🎨 ভবিষ্যদ্বক্তা তুলি হাতে ইজেলের দিকে যাচ্ছেন।'), 'ai-message');
+            npcSpeak(T("A picture, you say? Watch closely.", "একটা ছবি? ভালো করে দেখো।"));
+            walkTo(path, () => {
+                startPainting();
+            });
+        }
+
+        function startPainting() {
+            paintCtx.fillStyle = '#f7f1e3';
+            paintCtx.fillRect(0, 0, paintCanvas.width, paintCanvas.height);
+            paintTex.needsUpdate = true;
+            paint.plan = buildPaintPlan();
+            paint.next = 0;
+            paint.start = clock.getElapsedTime();
+            paint.active = true;
+            paint.picture = false;
+        }
+
+        function finishPainting() {
+            paint.active = false;
+            paint.picture = true;
+            paintTex.needsUpdate = true;
+            savePicBtn.hidden = false;
+            npcSpeak(T("Behold! My masterpiece. Tell me what you see.", "দেখো! আমার শিল্পকর্ম। তুমি কী দেখছ বলো।"));
+            appendPicture();
+        }
+
+        function appendPicture() {
+            const wrap = document.createElement('div');
+            wrap.className = 'message ai-message';
+            const img = document.createElement('img');
+            img.className = 'painting-img';
+            img.alt = 'Painting by the oracle';
+            img.src = paintCanvas.toDataURL('image/png');
+            wrap.appendChild(img);
+            chatContainer.appendChild(wrap);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function savePicture() {
+            if (!paint.picture) return;
+            const a = document.createElement('a');
+            a.href = paintCanvas.toDataURL('image/png');
+            a.download = 'oracle-painting.png';
+            a.click();
+        }
+
+        // ---- Walking and sitting state ----
+        const npcPos = { x: 0, z: -3 };
+        const WALK_SPEED = 2.6;
+        const OUT_PATH = [{ x: 3.6, z: -2.5 }, { x: 6.5, z: -2.5 }, { x: 10, z: -1.5 }];
+        const IN_PATH = [{ x: 6.5, z: -2.5 }, { x: 3.6, z: -2.5 }, { x: 0, z: -3 }];
+        const BENCH_PATH = [{ x: 8.2, z: -4.6 }, { x: 9, z: -5.7 }];
+        const BENCH_SEAT_Y = 0.56;   // top of the bench seat
+        let walkQueue = [];
+        let walking = false;
+        let walkDone = null;
+        let outside = false;
+        let seated = false;
+        let faceAngle = 0;
+        let lastFrameT = 0;
+
+        function walkTo(path, done) {
+            walkQueue = path.slice();
+            walking = true;
+            walkDone = done;
+        }
+
+        function goOutside() {
+            if (walking) return;
+            if (outside) {
+                npcSpeak(T("I am already in the garden.", "আমি তো এখন বাগানেই আছি।"));
+                return;
+            }
+            outside = true;
+            appendMessage(T('🌳 The oracle walks out into the garden.', '🌳 ভবিষ্যদ্বক্তা বাগানে বেরিয়ে গেলেন।'), 'ai-message');
+            npcSpeak(T("Into the garden I go!", "এবার বাগানে যাচ্ছি!"));
+            walkTo(OUT_PATH, () => {
+                npcSpeak(T("Ah, the fresh air of my garden. Stay close.", "আহা, বাগানের তাজা বাতাস! কাছে থেকো।"));
+            });
+            updateDoorBtn();
+        }
+
+        function goInside() {
+            if (walking) return;
+            if (!outside) {
+                npcSpeak(T("I am already inside my chamber.", "আমি তো ঘরের ভেতরেই আছি।"));
+                return;
+            }
+            seated = false;
+            outside = false;
+            appendMessage(T('🏠 The oracle goes back inside.', '🏠 ভবিষ্যদ্বক্তা ঘরে ফিরে গেলেন।'), 'ai-message');
+            npcSpeak(T("Returning to my chamber...", "ঘরে ফিরছি..."));
+            walkTo(IN_PATH, () => {
+                npcSpeak(T("Back inside my chamber.", "আমার ঘরে ফিরে এলাম।"));
+            });
+            updateDoorBtn();
+            updateSitBtn();
+        }
+
+        function toggleDoor() {
+            outside ? goInside() : goOutside();
+        }
+
+        function updateDoorBtn() {
+            doorBtn.textContent = outside
+                ? T('🚪 Come In', '🚪 ভেতরে আসো')
+                : T('🚪 Go Out', '🚪 বাইরে যাও');
+        }
+
+        // ---- Sitting on the garden bench ----
+        function goSit() {
+            if (walking) return;
+            if (seated) {
+                npcSpeak(T("I am already resting on the bench.", "আমি তো বেঞ্চে বসেই আছি।"));
+                return;
+            }
+            const path = [];
+            if (!outside) {
+                // Walk out through the doorway first
+                outside = true;
+                path.push({ x: 3.6, z: -2.5 }, { x: 6.5, z: -2.5 });
+                updateDoorBtn();
+            }
+            path.push(...BENCH_PATH);
+
+            appendMessage(T('🪑 The oracle walks to the bench.', '🪑 ভবিষ্যদ্বক্তা বেঞ্চের দিকে যাচ্ছেন।'), 'ai-message');
+            npcSpeak(T("A bench in the garden. Very well.", "বাগানের একটা বেঞ্চ। ভালো তো।"));
+            walkTo(path, () => {
+                seated = true;
+                updateSitBtn();
+                npcSpeak(T("Ah, I rest now. Ask your questions while I sit.", "আহ, এবার বিশ্রাম। বসে থেকেই প্রশ্নের উত্তর দেব।"));
+            });
+            updateSitBtn();
+        }
+
+        function goStand() {
+            if (walking) return;
+            if (!seated) {
+                npcSpeak(T("I am already standing.", "আমি তো দাঁড়িয়েই আছি।"));
+                return;
+            }
+            seated = false;
+            updateSitBtn();
+            appendMessage(T('🧍 The oracle stands up.', '🧍 ভবিষ্যদ্বক্তা উঠে দাঁড়ালেন।'), 'ai-message');
+            npcSpeak(T("Up I rise!", "এই যে, উঠে দাঁড়ালাম!"));
+        }
+
+        function toggleSit() {
+            seated ? goStand() : goSit();
+        }
+
+        function updateSitBtn() {
+            if (walking && !seated) {
+                sitBtn.textContent = T('🪑 Sitting...', '🪑 বসতে যাচ্ছি...');
+            } else {
+                sitBtn.textContent = seated
+                    ? T('🧍 Stand Up', '🧍 উঠে দাঁড়াও')
+                    : T('🪑 Sit', '🪑 বসো');
+            }
+            sitBtn.classList.toggle('on', seated);
+        }
+
+        function showBubble(text) {
+            bubbleEl.textContent = text;
+            bubbleEl.classList.add('show');
+        }
+
+        function hideBubble() {
+            bubbleEl.classList.remove('show');
+        }
+
+        function npcSpeak(text) {
+            const now = clock.getElapsedTime();
+            const duration = Math.min(8, 1.5 + text.length * 0.05);
+            talkUntil = now + duration;
+            showBubble(text);
+            clearTimeout(bubbleTimer);
+            bubbleTimer = setTimeout(hideBubble, duration * 1000 + 800);
+            speakAloud(text);
+        }
+
+        function npcCelebrate() {
+            winUntil = clock.getElapsedTime() + 4;
+            npcDance(6);
+        }
+
+        function npcDance(seconds = 5) {
+            danceUntil = clock.getElapsedTime() + seconds;
+        }
+
+        function danceNow() {
+            npcDance(5);
+            npcSpeak(T("Behold, my cosmic moves!", "দেখো, আমার মহাজাগতিক নাচ!"));
+        }
+
+        // ---- Funny dance (Robot Shuffle) ----
+        function funnyDance() {
+            funnyUntil = clock.getElapsedTime() + 6;
+            npcSpeak(T("Observe my legendary Robot Shuffle!", "আমার বিখ্যাত রোবট নাচ দেখো!"));
+        }
+
+        // ================== SECRET CHASE (code 1234) ==================
+        function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+        function buildChaseCar(color, police) {
+            const g = new THREE.Group();
+            const paint = mat(color, { roughness: 0.3, metalness: 0.4 });
+            const dark = mat(0x111111, { roughness: 0.9 });
+            const glassM = mat(0x1a2a3a, { roughness: 0.1, metalness: 0.6 });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.6, 3.6), paint);
+            body.position.y = 0.6;
+            g.add(body);
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 1.6), glassM);
+            cabin.position.set(0, 1.15, 0.1);
+            g.add(cabin);
+
+            [[-1, -1.2], [1, -1.2], [-1, 1.2], [1, 1.2]].forEach(([x, z]) => {
+                const w = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.36, 14), dark);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(x, 0.4, z);
+                g.add(w);
+            });
+
+            if (police) {
+                // Blue stripe and flashing light bar
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.12, 3.0), mat(0x1d3f9e));
+                stripe.position.y = 0.7;
+                g.add(stripe);
+
+                const redMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+                const blueMat = new THREE.MeshBasicMaterial({ color: 0x2255ff });
+                const red = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.3), redMat);
+                red.position.set(-0.4, 1.55, 0.1);
+                const blue = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.3), blueMat);
+                blue.position.set(0.4, 1.55, 0.1);
+                g.add(red, blue);
+                g.userData.redMat = redMat;
+                g.userData.blueMat = blueMat;
+            } else {
+                // The oracle sitting in the driver's seat (head and hat peek out)
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), mat(0xd9b08c));
+                head.position.set(0, 1.5, 0.1);
+                const hat = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.5, 14), mat(0x3d1c5c));
+                hat.position.set(0, 1.95, 0.1);
+                g.add(head, hat);
+
+                // Red taillights (we chase from behind)
+                const tl = new THREE.MeshBasicMaterial({ color: 0xff3322 });
+                [-0.65, 0.65].forEach(x => {
+                    const t1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.06), tl);
+                    t1.position.set(x, 0.7, 1.82);
+                    g.add(t1);
+                });
+            }
+
+            g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+            return g;
+        }
+
+        function buildChaseScene() {
+            const s = new THREE.Scene();
+            s.background = new THREE.Color(0x0a0716);
+            s.fog = new THREE.Fog(0x0a0716, 24, 80);
+            s.add(new THREE.HemisphereLight(0x8fa8ff, 0x201020, 0.8));
+            const moon = new THREE.DirectionalLight(0xbfd4ff, 0.7);
+            moon.position.set(-6, 12, 6);
+            s.add(moon);
+
+            // Road and sidewalks (road runs from z = -180 to z = 80)
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(14, 260), mat(0x2b2b33, { roughness: 0.95 }));
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(0, 0, -50);
+            road.receiveShadow = true;
+            s.add(road);
+            [-8.6, 8.6].forEach(x => {
+                const sw = new THREE.Mesh(new THREE.BoxGeometry(3, 0.25, 260), mat(0x55505f));
+                sw.position.set(x, 0.12, -50);
+                sw.receiveShadow = true;
+                s.add(sw);
+            });
+
+            // Lane dashes that scroll past
+            chase.dashes = [];
+            for (let i = 0; i < 20; i++) {
+                const d = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.02, 2.2),
+                    new THREE.MeshBasicMaterial({ color: 0xeeeeee })
+                );
+                d.position.y = 0.02;
+                d.userData.base = i * 9;
+                s.add(d);
+                chase.dashes.push(d);
+            }
+
+            // Buildings on both sides that scroll past
+            chase.buildings = [];
+            const bColors = [0x2a2446, 0x1f3050, 0x3b2a3f, 0x233b3a];
+            for (let i = 0; i < 16; i++) {
+                const side = i % 2 === 0 ? -1 : 1;
+                const h = 4 + Math.random() * 9;
+                const b = new THREE.Mesh(new THREE.BoxGeometry(4, h, 4), mat(bColors[i % bColors.length]));
+                b.position.set(side * 12.5, h / 2, 0);
+                b.userData.base = Math.floor(i / 2) * 12;
+                s.add(b);
+                chase.buildings.push(b);
+            }
+
+            // The oracle's yellow Lamborghini
+            chase.car = buildChaseCar(0xf5c400, false);
+            s.add(chase.car);
+
+            // Two police cars chasing from behind
+            chase.police = [buildChaseCar(0xffffff, true), buildChaseCar(0xf1f1f1, true)];
+            chase.police.forEach(p => s.add(p));
+
+            chase.scene = s;
+            chase.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+        }
+
+        function setChaseCaption(text) {
+            smCaption.textContent = text;
+        }
+
+        function startChase() {
+            const c = chase;
+            c.t = 0;
+            c.off = 0;
+            c.laneOff = 0;
+            c.prevX = 0;
+            c.boost = 0;
+            c.curSpeed = 26;
+            c.stage = -1;
+            c.finished = false;
+            smReplay.hidden = true;
+            setChaseCaption('');
+        }
+
+        function chaseBoost() {
+            if (!chase.finished && chase.boost < 1) chase.boost = 20;
+        }
+
+        function endChase() {
+            chase.finished = true;
+            smReplay.hidden = false;
+        }
+
+        function replayChase() {
+            startChase();
+        }
+
+        function updateChase(dt) {
+            const c = chase;
+            c.t += dt;
+            const t = c.t;
+
+            // Steering from keyboard
+            const steer = (secretKeys['arrowright'] || secretKeys['d'] ? 1 : 0)
+                        - (secretKeys['arrowleft'] || secretKeys['a'] ? 1 : 0);
+            c.laneOff = clampN(c.laneOff + steer * dt * 4, -4, 4);
+            if (steer === 0) c.laneOff *= Math.max(0, 1 - dt * 1.5);
+
+            // The road weaves a little on its own
+            const x = c.laneOff + Math.sin(t * 1.1) * 1.2;
+            const carVx = (x - c.prevX) / Math.max(dt, 0.001);
+            c.prevX = x;
+
+            // Speed: magic boost fades out, and the car slows down after the finish
+            c.boost = Math.max(0, c.boost - dt * 12);
+            const target = c.finished ? 0 : 26 + c.boost;
+            c.curSpeed += (target - c.curSpeed) * Math.min(1, dt * 3);
+            c.off += c.curSpeed * dt;
+
+            // Scroll road dashes and buildings toward the camera
+            const L = 170;
+            const wrapZ = base => ((base + c.off) % L + L) % L - 150;
+            c.dashes.forEach(d => { d.position.z = wrapZ(d.userData.base); });
+            c.buildings.forEach(b => { b.position.z = wrapZ(b.userData.base); });
+
+            // Player car: swerves, leans, and yaws with the turns
+            c.car.position.set(x, 0, 0);
+            c.car.rotation.y = clampN(-carVx * 0.03, -0.35, 0.35);
+            c.car.rotation.z = -steer * 0.08;
+
+            // Police chase behind and follow the swerves with a little lag
+            c.police.forEach((p, k) => {
+                const gap = 4 + k * 4 + Math.sin(t * 0.9 + k * 1.7) * 1.5;
+                const targetX = x + (k === 0 ? -1.2 : 1.6);
+                p.position.x += (targetX - p.position.x) * Math.min(1, dt * 2.5);
+                p.position.z = gap;
+                p.rotation.y = Math.sin(t * 1.3 + k) * 0.08;
+
+                // Sirens flash red and blue
+                const on = Math.sin(t * 12 + k * Math.PI) > 0;
+                p.userData.redMat.color.setHex(on ? 0xff2222 : 0x330000);
+                p.userData.blueMat.color.setHex(on ? 0x061a66 : 0x2255ff);
+            });
+
+            // Camera follows from behind and above, shaking a little during a boost
+            const shake = c.boost > 1 ? (Math.random() - 0.5) * 0.15 : 0;
+            c.camera.position.set(x * 0.5 + shake, 9, 14);
+            c.camera.lookAt(x * 0.6, 0.3, -6);
+
+            // Story beats
+            while (c.stage + 1 < CHASE_STAGES.length && t >= CHASE_STAGES[c.stage + 1].at) {
+                c.stage++;
+                const st = CHASE_STAGES[c.stage];
+                setChaseCaption(T(st.en, st.bn));
+                speakAloud(T(st.en, st.bn));
+                if (st.end) endChase();
+            }
+        }
+
+        function openSecretMenu() {
+            if (!chase.scene) buildChaseScene();
+            secretOpen = true;
+            userInput.blur();
+            secretEl.hidden = false;
+            document.getElementById('sm-view').appendChild(renderer.domElement);
+            resize();
+            startChase();
+        }
+
+        function closeSecretMenu() {
+            secretOpen = false;
+            secretEl.hidden = true;
+            sceneEl.appendChild(renderer.domElement);
+            if (window.speechSynthesis) speechSynthesis.cancel();
+            resize();
+        }
+
+        window.addEventListener('keydown', e => {
+            if (!secretOpen) return;
+            const k = e.key.toLowerCase();
+            secretKeys[k] = true;
+            if (['arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+            if (k === ' ' && !e.repeat) chaseBoost();
+            if (k === 'escape') closeSecretMenu();
+        });
+        window.addEventListener('keyup', e => {
+            secretKeys[e.key.toLowerCase()] = false;
+        });
+
+        // ---- Animation loop ----
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            const dt = Math.min(t - lastFrameT, 0.05);
+            lastFrameT = t;
+
+            // Walk along the path when the oracle goes in, out, to the bench or to the easel
+            if (walking && walkQueue.length) {
+                const target = walkQueue[0];
+                const dx = target.x - npcPos.x;
+                const dz = target.z - npcPos.z;
+                const d = Math.hypot(dx, dz);
+                const step = WALK_SPEED * dt;
+                if (d <= step) {
+                    npcPos.x = target.x;
+                    npcPos.z = target.z;
+                    walkQueue.shift();
+                    if (walkQueue.length === 0) {
+                        walking = false;
+                        if (walkDone) {
+                            const cb = walkDone;
+                            walkDone = null;
+                            cb();
+                        }
+                    }
+                } else {
+                    npcPos.x += (dx / d) * step;
+                    npcPos.z += (dz / d) * step;
+                    faceAngle = Math.atan2(dx, dz);
+                }
+            }
+
+            const mp = t - magicStart;                 // seconds into the magic trick
+            const magic = mp >= 0 && mp < MAGIC_LEN;
+
+            const painting = paint.active;
+            const mood = t < winUntil ? 'win' : (busy ? 'thinking' : 'idle');
+            const talking = t < talkUntil || voiceSpeaking;
+            const dancing = t < danceUntil;
+            const funny = t < funnyUntil;
+            const powered = talking || mood === 'win' || dancing || funny || magic || painting;
+
+            // Base position (follows the walk) and normal hover and sway
+            npc.position.x = npcPos.x;
+            npc.position.z = npcPos.z;
+            npc.position.y = 0.15 + Math.sin(t * 1.8) * 0.05;
+            npc.rotation.y = Math.sin(t * 0.4) * 0.25;
+
+            // Normal arms
+            leftArm.rotation.x = Math.sin(t * 1.8 + 1) * 0.05;
+            leftArm.rotation.z = 0;
+            rightArm.rotation.x = mood === 'thinking'
+                ? -1.2 + Math.sin(t * 6) * 0.06
+                : Math.sin(t * 1.8) * 0.05;
+            rightArm.rotation.z = 0;
+
+            // Head bob while talking
+            headGroup.rotation.z = talking ? Math.sin(t * 9) * 0.02 : 0;
+
+            // Orb
+            if (mood === 'thinking') {
+                orbTarget.set(0.2, 2.35, 0.7);
+            } else {
+                orbTarget.set(0.95, 1.55 + Math.sin(t * 2.2) * 0.06, 0.35);
+            }
+            orb.position.lerp(orbTarget, 0.1);
+            orb.rotation.y += mood === 'thinking' ? 0.15 : 0.02;
+
+            let pulse = 1 + Math.sin(t * 2) * 0.05;
+            if (mood === 'thinking') pulse = 1 + Math.sin(t * 8) * 0.12;
+            if (mood === 'win') pulse = 1.9;
+            orb.scale.setScalar(pulse);
+
+            orbMat.color.lerp(MOOD_COLORS[mood], 0.08);
+            orbLight.color.copy(orbMat.color);
+            orbLight.intensity = mood === 'win' ? 1.6 : 0.6;
+            crystalBall.material.emissive.copy(orbMat.color).multiplyScalar(0.6);
+
+            // Aura ring spins and pulses, brighter when powered
+            aura.rotation.z += powered ? 0.04 : 0.01;
+            auraMat.color.copy(orbMat.color);
+            auraMat.opacity = powered ? 0.8 : 0.4 + Math.sin(t * 2) * 0.1;
+            const auraScale = powered ? 1.5 + Math.sin(t * 6) * 0.1 : 1 + Math.sin(t * 2) * 0.03;
+            aura.scale.set(auraScale, auraScale, 1);
+
+            // Lightning when talking, winning, dancing, funny dancing, doing magic or painting
+            if (powered) {
+                if (t - lastBoltT > 0.09) {
+                    jitterBolts();
+                    lastBoltT = t;
+                }
+                bolts.forEach(b => {
+                    b.visible = Math.random() > 0.35;
+                    b.material.color.copy(orbMat.color);
+                });
+            } else {
+                bolts.forEach(b => b.visible = false);
+            }
+
+            // Blink
+            const blink = (t % 3.2) < 0.12;
+            eyeL.scale.y = eyeR.scale.y = blink ? 0.15 : 1;
+
+            // Mouth moves while talking
+            mouth.scale.y = talking ? 1 + Math.abs(Math.sin(t * 16)) * 4 : 1;
+
+            // ---- DANCE (overrides the normal motion above) ----
+            if (dancing) {
+                const beat = t * 9;
+
+                npc.position.y = 0.15 + Math.abs(Math.sin(beat)) * 0.18;
+                npc.rotation.y = Math.sin(t * 2.2) * 0.9;
+                npc.rotation.z = Math.sin(beat * 0.5) * 0.08;
+
+                leftArm.rotation.x = Math.sin(beat) * 1.3;
+                rightArm.rotation.x = Math.sin(beat + Math.PI) * 1.3;
+                leftArm.rotation.z = -0.5 + Math.sin(beat * 0.5) * 0.5;
+                rightArm.rotation.z = 0.5 - Math.sin(beat * 0.5) * 0.5;
+
+                headGroup.rotation.z = Math.sin(beat * 0.5) * 0.25;
+                headGroup.rotation.x = Math.sin(beat) * 0.08;
+
+                orb.position.set(
+                    Math.cos(t * 4) * 0.9,
+                    1.6 + Math.sin(t * 6) * 0.25,
+                    Math.sin(t * 4) * 0.9
+                );
+                orb.rotation.y += 0.2;
+                orbMat.color.setHSL((t * 0.4) % 1, 1, 0.65);
+                orb.scale.setScalar(1.3 + Math.sin(beat) * 0.15);
+
+                mouth.scale.y = 1 + Math.abs(Math.sin(beat)) * 3;
+            } else {
+                npc.rotation.z = 0;
+                headGroup.rotation.x = 0;
+            }
+
+            // ---- FUNNY DANCE (Robot Shuffle, runs on top of the other moves) ----
+            if (funny) {
+                const b = t * 7;
+                npc.position.x = npcPos.x + Math.sign(Math.sin(b)) * 0.25;
+                npc.rotation.y = Math.round(Math.sin(b * 0.5) * 2) * 0.5;
+                robe.rotation.z = Math.sin(b * 2) * 0.25;
+                hatCone.rotation.z = Math.sin(b * 3) * 0.35;
+                hatCone.rotation.x = Math.cos(b * 3) * 0.2;
+                leftArm.rotation.x = Math.round(Math.sin(b)) * 1.2;
+                rightArm.rotation.x = -Math.round(Math.sin(b)) * 1.2;
+                orb.position.set(
+                    Math.cos(t * 8) * 1.1,
+                    2.4 + Math.sin(t * 8) * 0.2,
+                    Math.sin(t * 8) * 1.1
+                );
+            } else {
+                robe.rotation.z = 0;
+                hatCone.rotation.z = 0;
+                hatCone.rotation.x = 0;
+            }
+
+            // ---- WALKING (faces the way he moves, with a little bounce and arm swing) ----
+            if (walking) {
+                npc.rotation.y = faceAngle;
+                const swing = Math.sin(t * 12);
+                npc.position.y += Math.abs(swing) * 0.08;
+                leftArm.rotation.x = swing * 0.6;
+                rightArm.rotation.x = -swing * 0.6;
+            }
+
+            // ---- SITTING (on the bench, facing the camera, arms resting forward) ----
+            if (seated && !walking) {
+                npc.position.x = npcPos.x;
+                npc.position.z = npcPos.z;
+                npc.position.y = BENCH_SEAT_Y + Math.sin(t * 1.5) * 0.01;
+                npc.rotation.y = 0;
+                npc.rotation.z = 0;
+                leftArm.rotation.x = -1.1;
+                rightArm.rotation.x = -1.1;
+                leftArm.rotation.z = -0.15;
+                rightArm.rotation.z = 0.15;
+            }
+
+            // ---- PAINTING (stands at the easel and brushes the canvas) ----
+            if (painting) {
+                const elapsed = t - paint.start;
+                npc.rotation.y = -Math.PI / 2;            // face the easel
+                npc.position.y = 0.15 + Math.sin(t * 3) * 0.02;
+
+                // Brush arm sweeps back and forth
+                rightArm.rotation.x = -1.4 + Math.sin(t * 7) * 0.25;
+                rightArm.rotation.z = -0.3;
+                leftArm.rotation.x = -0.4;
+
+                // Draw the next steps of the picture whose time has come
+                let drew = false;
+                while (paint.next < paint.plan.length && elapsed >= paint.plan[paint.next].t) {
+                    paint.plan[paint.next].draw(paintCtx);
+                    paint.next++;
+                    drew = true;
+                }
+                if (drew) paintTex.needsUpdate = true;
+
+                if (elapsed >= PAINT_LEN) {
+                    while (paint.next < paint.plan.length) {
+                        paint.plan[paint.next].draw(paintCtx);
+                        paint.next++;
+                    }
+                    finishPainting();
+                }
+            }
+
+            // ---- MAGIC TRICK (arms up, spin, orb into hat, sparkles, orb returns) ----
+            sparkles.forEach(s => {
+                if (s.life > 0) {
+                    s.life -= dt;
+                    s.mesh.position.addScaledVector(s.vel, dt);
+                    s.vel.y -= 4 * dt;
+                    s.mesh.visible = s.life > 0;
+                    s.mesh.scale.setScalar(Math.max(0.2, s.life));
+                }
+            });
+
+            if (magic) {
+                // 0 to 0.8s: arms rise up and the oracle spins once
+                const raise = Math.min(1, mp / 0.8);
+                leftArm.rotation.x = -2.8 * raise;
+                rightArm.rotation.x = -2.8 * raise;
+                leftArm.rotation.z = -0.3 * raise;
+                rightArm.rotation.z = 0.3 * raise;
+                npc.rotation.y = Math.min(1, mp / 1.5) * Math.PI * 2;
+
+                // 0 to 1.6s: orb flies into the hat
+                if (mp < 1.6) {
+                    orb.position.lerp(HAT_POS, 0.12);
+                    orb.scale.setScalar(1);
+                }
+
+                // 1.6 to 2.0s: orb shrinks away inside the hat, then the sparkles burst out
+                if (mp >= 1.6 && mp < 2.0) {
+                    orb.position.copy(HAT_POS);
+                    orb.scale.setScalar(Math.max(0.01, 1 - (mp - 1.6) / 0.4));
+                }
+                if (mp >= 2.0 && !magicBurstDone) {
+                    magicBurstDone = true;
+                    burstSparkles();
+                }
+
+                // 2.6 to 3.4s: orb pops back out and returns to its place
+                if (mp >= 2.6) {
+                    orb.position.lerp(orbTarget, 0.15);
+                    orb.scale.setScalar(Math.min(1, (mp - 2.6) / 0.4));
+                }
+
+                // Hat wiggles as the magic happens
+                hatCone.rotation.z = Math.sin(mp * 14) * 0.08 * (mp > 1.6 && mp < 2.6 ? 1 : 0);
+            } else {
+                hatCone.rotation.z = funny ? hatCone.rotation.z : 0;
+            }
+
+            // Render either the house or the secret chase, whichever is open
+            if (secretOpen) {
+                updateChase(dt);
+                renderer.render(chase.scene, chase.camera);
+            } else {
+                updateCamera();
+                renderer.render(scene, camera);
+            }
+        }
+
+        function resize() {
+            const host = secretOpen ? document.getElementById('sm-view') : sceneEl;
+            const w = host.clientWidth;
+            const h = host.clientHeight;
+            if (!w || !h) return;
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            if (chase.camera) {
+                chase.camera.aspect = w / h;
+                chase.camera.updateProjectionMatrix();
+            }
+        }
+        window.addEventListener('resize', resize);
+        resize();
+        updateCamera();
+        animate();
+
+        // ================== GAME + CHAT ==================
+        function startGame() {
+            const secret = SECRETS[Math.floor(Math.random() * SECRETS.length)];
+            game = { secret: secret, left: MAX_QUESTIONS, history: [], over: false };
+            chatContainer.innerHTML = '';
+            const intro = T(
+                `🎲 New game! I'm thinking of something. You have ${MAX_QUESTIONS} questions. ` +
+                `Ask yes/no questions, or type "guess: your answer" when you're ready. ` +
+                `Stuck? Use Mind Read for a hint (costs ${MIND_READ_COST} questions).`,
+                `🎲 নতুন খেলা! আমি একটা জিনিস ভাবছি। তোমার ${MAX_QUESTIONS}টি প্রশ্ন আছে। ` +
+                `হ্যাঁ/না প্রশ্ন করো, অথবা "অনুমান: তোমার উত্তর" লেখো। ` +
+                `আটকে গেলে 🔮 Mind Read ব্যবহার করো (${MIND_READ_COST}টি প্রশ্ন খরচ হবে)।`
+            );
+            appendMessage(intro, 'ai-message');
+            npcSpeak(T(
+                "Ah, a seeker. I have chosen my secret. Ask, and I shall answer.",
+                "আহা, একজন অনুসন্ধানকারী! আমি আমার গোপন বস্তু বেছে নিয়েছি। প্রশ্ন করো, আমি উত্তর দেব।"
+            ));
+            updateStatus();
+        }
+
+        function startFreeChat() {
+            game = null;
+            chatHistory = [];
+            chatContainer.innerHTML = '';
+            appendMessage(T("Free chat mode. What's on your mind?", "মুক্ত আলাপ। তোমার মনে কী আছে?"), 'ai-message');
+            npcSpeak(T("Free chat it is. Speak your mind.", "মুক্ত আলাপ শুরু। মন খুলে বলো।"));
+            updateStatus();
+        }
+
+        function updateStatus() {
+            if (!game) {
+                statusEl.textContent = T('Free chat mode', 'মুক্ত আলাপ');
+            } else if (game.over) {
+                statusEl.textContent = T('Game over. Start a new one!', 'খেলা শেষ। নতুন খেলা শুরু করো!');
+            } else {
+                statusEl.textContent = T(`Questions left: ${game.left}`, `বাকি প্রশ্ন: ${game.left}`);
+            }
+        }
+
+        function gameSystemPrompt(secret) {
+            let rules = `You are Sasta, a playful oracle NPC running a game of 20 Questions.
+The secret object is: "${secret}".
+Rules:
+- Never say the secret's name, spell it, or hint at it beyond the answers below.
+- Answer each yes/no question with exactly one of: "Yes.", "No.", "Sometimes.", or "Not relevant."
+- If the player's message starts with "guess:" and the guess names the secret (synonyms and rough wording count), reply with a short celebration and put the token [CORRECT] at the very end of your reply.
+- If the guess is wrong, say briefly that it is wrong. Do NOT include the token.
+- If the message is not a question or guess about the object, say briefly that you only answer questions about the mystery object.
+- Keep replies under 25 words and keep a fun, mysterious oracle tone.`;
+
+            if (isBn()) {
+                rules += `
+- IMPORTANT: Reply ONLY in Bengali script (বাংলা). Use these answer words: "হ্যাঁ।" for Yes, "না।" for No, "কখনো কখনো।" for Sometimes, "প্রাসঙ্গিক নয়।" for Not relevant.
+- The player may write in Bengali or English, and may use "অনুমান:" instead of "guess:". Understand both languages.
+- The token [CORRECT] must still be written exactly as [CORRECT] at the end of a correct reply.`;
+            }
+            return rules;
+        }
+
+        // Mind Read: costs questions, gives a cryptic hint
+        async function mindRead() {
+            if (!game || game.over) {
+                npcSpeak(T("Start a game first, and then I may read your mind.", "আগে একটা খেলা শুরু করো, তারপর আমি তোমার মন পড়ব।"));
+                return;
+            }
+            if (busy) return;
+            if (game.left < MIND_READ_COST) {
+                npcSpeak(T("Not enough questions left for my power. Ask carefully.", "আমার শক্তির জন্য প্রশ্ন যথেষ্ট নেই। সাবধানে প্রশ্ন করো।"));
+                return;
+            }
+
+            busy = true;
+            game.left -= MIND_READ_COST;
+            updateStatus();
+            appendMessage(T(`🔮 Mind Read (-${MIND_READ_COST} questions)`, `🔮 Mind Read (-${MIND_READ_COST} প্রশ্ন)`), 'user-message');
+
+            const aiMsgDiv = document.createElement('div');
+            aiMsgDiv.className = 'message ai-message';
+            aiMsgDiv.textContent = T('The oracle peers into your mind...', 'ভবিষ্যদ্বক্তা তোমার মনের ভেতরে তাকাচ্ছেন...');
+            chatContainer.appendChild(aiMsgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            showBubble('🔮 ...');
+
+            try {
+                const hintSystem = isBn()
+                    ? `You are a mysterious oracle. The secret object is "${game.secret}". Give ONE cryptic but helpful hint in under 20 words. Reply ONLY in Bengali script (বাংলা). Do not name the object or any word from its name.`
+                    : `You are a mysterious oracle. The secret object is "${game.secret}". Give ONE cryptic but helpful hint in under 20 words. Do not name the object or any word from its name.`;
+                const hint = await callGroq(hintSystem, [{ role: 'user', content: isBn() ? 'আমাকে একটা ইঙ্গিত দাও।' : 'Give me a hint.' }]);
+                aiMsgDiv.textContent = `🔮 ${T('Hint', 'ইঙ্গিত')}: ${hint}`;
+                npcSpeak(hint);
+            } catch (error) {
+                aiMsgDiv.textContent = error.message || 'The power fizzled out.';
+                npcSpeak(T("The mists have clouded my sight. Try again.", "কুয়াশা আমার দৃষ্টি ঢেকে ফেলেছে। আবার চেষ্টা করো।"));
+            } finally {
+                busy = false;
+            }
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function handleUserMessage() {
+            const text = userInput.value.trim();
+
+            // Secret code: opens the chase menu without showing anything in the chat
+            if (text === SECRET_CODE) {
+                userInput.value = '';
+                openSecretMenu();
+                return;
+            }
+
+            if (text === '' || busy) return;
+
+            appendMessage(text, 'user-message');
+            userInput.value = '';
+            const low = text.toLowerCase();
+
+            // Fun shortcut: typing "dance" makes the oracle dance without using the API
+            if (low === 'dance' || text === 'নাচ') {
+                appendMessage(T('💃 The oracle begins to dance!', '💃 ভবিষ্যদ্বক্তা নাচতে শুরু করলেন!'), 'ai-message');
+                npcDance(5);
+                npcSpeak(T("You asked for it. Watch closely!", "তুমি চেয়েছিলে, এখন ভালো করে দেখো!"));
+                return;
+            }
+
+            // Fun shortcut: typing "funny dance" starts the Robot Shuffle
+            if (low === 'funny dance' || text === 'মজার নাচ') {
+                appendMessage(T('🤖 The oracle busts out the Robot Shuffle!', '🤖 ভবিষ্যদ্বক্তা রোবট নাচ শুরু করলেন!'), 'ai-message');
+                funnyDance();
+                return;
+            }
+
+            // Magic trick: "I'm bored"
+            if (hasPhrase(low, text, MAGIC_WORDS)) {
+                magicTrick();
+                return;
+            }
+
+            // Painting: "make a picture"
+            if (hasPhrase(low, text, PAINT_WORDS)) {
+                makePicture();
+                return;
+            }
+
+            // Movement commands
+            if (hasPhrase(low, text, STAND_WORDS)) {
+                goStand();
+                return;
+            }
+            if (hasPhrase(low, text, SIT_WORDS)) {
+                goSit();
+                return;
+            }
+            if (hasPhrase(low, text, OUT_WORDS)) {
+                goOutside();
+                return;
+            }
+            if (hasPhrase(low, text, IN_WORDS)) {
+                goInside();
+                return;
+            }
+
+            if (game && game.over) {
+                appendMessage(T('The game is over. Click "New 20 Questions" to play again.', 'খেলা শেষ। আবার খেলতে "New 20 Questions" চাপো।'), 'ai-message');
+                npcSpeak(T("My riddle is finished. Begin a new game to test me again.", "আমার ধাঁধা শেষ। নতুন খেলা শুরু করে আবার চেষ্টা করো।"));
+                return;
+            }
+
+            const aiMsgDiv = document.createElement('div');
+            aiMsgDiv.className = 'message ai-message';
+            aiMsgDiv.textContent = T('Thinking...', 'ভাবছি...');
+            chatContainer.appendChild(aiMsgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            busy = true;
+            showBubble('🔮 ...');
+
+            try {
+                if (game) {
+                    await playGameTurn(text, aiMsgDiv);
+                } else {
+                    await freeChatTurn(text, aiMsgDiv);
+                }
+            } catch (error) {
+                aiMsgDiv.textContent = error.message || 'Something went wrong.';
+                npcSpeak(T("The mists have clouded my sight. Try again.", "কুয়াশা আমার দৃষ্টি ঢেকে ফেলেছে। আবার চেষ্টা করো।"));
+            } finally {
+                busy = false;
+            }
+
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function freeChatTurn(text, aiMsgDiv) {
+            chatHistory.push({ role: 'user', content: text });
+            const reply = await callGroq(freeChatSystem(), chatHistory);
+            chatHistory.push({ role: 'assistant', content: reply });
+            aiMsgDiv.textContent = reply;
+            npcSpeak(reply);
+        }
+
+        async function playGameTurn(text, aiMsgDiv) {
+            game.left--;
+            game.history.push({ role: 'user', content: text });
+
+            const reply = await callGroq(gameSystemPrompt(game.secret), game.history);
+            const won = reply.includes('[CORRECT]');
+            const cleanReply = reply.replace('[CORRECT]', '').trim();
+
+            game.history.push({ role: 'assistant', content: cleanReply });
+            aiMsgDiv.textContent = cleanReply;
+            npcSpeak(cleanReply);
+
+            if (won) {
+                game.over = true;
+                const used = MAX_QUESTIONS - game.left;
+                aiMsgDiv.textContent += '\n\n' + T(
+                    `🏆 You won in ${used} ${used === 1 ? 'question' : 'questions'}!`,
+                    `🏆 ${used}টি প্রশ্নে তুমি জিতেছ!`
+                );
+                npcCelebrate();
+            } else if (game.left <= 0) {
+                game.over = true;
+                aiMsgDiv.textContent += '\n\n' + T(
+                    `💀 Out of questions! It was ${game.secret}.`,
+                    `💀 প্রশ্ন শেষ! উত্তর ছিল ${game.secret}।`
+                );
+            }
+
+            updateStatus();
+        }
+
+        // Calls our own Node server (/api/chat), which holds the Groq key
+        async function callGroq(systemText, messages) {
+            let response;
+            try {
+                response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ system: systemText, messages: messages })
+                });
+            } catch (networkError) {
+                throw new Error("Error connecting to Sasta's network. Check your internet connection!");
+            }
+
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error("Sasta says: " + data.error.message);
+            }
+
+            const reply = data.choices?.[0]?.message?.content;
+            if (!reply) {
+                throw new Error("Received an unexpected response format from the server.");
+            }
+            return reply.trim();
+        }
+
+        function appendMessage(text, className) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${className}`;
+            msgDiv.textContent = text;
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        updateSitBtn();
+    </script>
+
+</body>
+</html>

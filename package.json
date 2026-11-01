@@ -1,0 +1,17 @@
+{
+  "name": "oracle",
+  "version": "1.0.0",
+  "description": "Sasta AI oracle 20 questions game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  }
+}
