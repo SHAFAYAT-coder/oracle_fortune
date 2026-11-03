@@ -239,12 +239,12 @@
             <div id="scene"></div>
             <div id="bubble"></div>
             <div class="scene-label">THE ORACLE</div>
-            <div class="scene-hint">Drag to look around · Scroll to zoom</div>
+            <div class="scene-hint">Drag to look around · Hold on the oracle to pick him up · Scroll to zoom</div>
         </section>
 
         <section id="chat-col">
             <div id="chat-container">
-                <div class="message ai-message">Greetings, Master! Sasta is online. Want to play 20 Questions? Hit "New 20 Questions" above, or just chat with me freely. Click the mic to talk to me. Type "dance" or "funny dance" to see my moves. Say "go out" for the garden, "sit" to rest on the bench, "stand up" to rise, and "come in" to go back inside. Say "I'm bored" to see a magic trick. Say "make a picture" and I will paint one for you. Press 🌐 to speak Bengali.</div>
+                <div class="message ai-message">Greetings, Master! Sasta is online. Want to play 20 Questions? Hit "New 20 Questions" above, or just chat with me freely. Click the mic to talk to me. Type "dance" or "funny dance" to see my moves. Say "go out" for the garden, "sit" to rest on the bench, "stand up" to rise, and "come in" to go back inside. Say "I'm bored" to see a magic trick. Say "make a picture" and I will paint one for you. Hold the mouse on me to pick me up. Press 🌐 to speak Bengali.</div>
             </div>
             <div id="input-container">
                 <input type="text" id="user-input" placeholder="Ask a yes/no question, or type 'guess: ...'" autofocus>
@@ -307,6 +307,9 @@
             { at: 23, en: "✨ Escaped! The police are lost in the fog.", bn: "✨ পালিয়েছি! পুলিশ কুয়াশায় হারিয়ে গেছে।", end: true }
         ];
 
+        const GIGGLES_EN = ["Hee hee!", "Tickles!", "Whee!", "Ha ha, stop!"];
+        const GIGGLES_BN = ["হি হি!", "সুড়সুড়ি লাগছে!", "ওহো!", "হা হা, থামো!"];
+
         // Matches English phrases as whole words (so "sit" does not match "visit"),
         // and Bengali phrases as plain substrings.
         function hasPhrase(low, text, phrases) {
@@ -348,13 +351,23 @@
         let voiceOn = true;
         let voiceSpeaking = false;
 
-        // Secret chase state (declared early because animate() runs during setup)
+        // Secret chase state
         let secretOpen = false;
         const secretKeys = {};
         const chase = {
             scene: null, camera: null, car: null, police: [], dashes: [], buildings: [],
             t: 0, off: 0, laneOff: 0, prevX: 0, boost: 0, curSpeed: 26, stage: -1, finished: false
         };
+
+        // Grab-and-hold state (declared early so every function can see it)
+        let grabbing = false;
+        let heldTarget = null;
+        let heldLift = 0;
+        let giggleTimer = null;
+        let pendingGrab = false;
+        let holdTimer = null;
+        let pointerStart = { x: 0, y: 0 };
+        let dragging = false, lastX = 0, lastY = 0;
 
         userInput.addEventListener('keypress', e => {
             if (e.key === 'Enter') handleUserMessage();
@@ -499,20 +512,58 @@
             camera.lookAt(focus);
         }
 
-        // Drag to orbit, scroll to zoom
-        let dragging = false, lastX = 0, lastY = 0;
+        // Drag to orbit, hold on the oracle to grab him
         sceneEl.addEventListener('pointerdown', e => {
-            dragging = true; lastX = e.clientX; lastY = e.clientY;
             sceneEl.setPointerCapture(e.pointerId);
+            pointerStart = { x: e.clientX, y: e.clientY };
+            if (pointOnOracle(e.clientX, e.clientY)) {
+                // Hold the mouse on him for a moment to pick him up
+                pendingGrab = true;
+                clearTimeout(holdTimer);
+                holdTimer = setTimeout(() => {
+                    if (pendingGrab) startGrab();
+                }, 350);
+            } else {
+                dragging = true;
+                lastX = e.clientX; lastY = e.clientY;
+            }
         });
+
         sceneEl.addEventListener('pointermove', e => {
-            if (!dragging) return;
+            if (grabbing) {
+                const p = floorPointAt(e.clientX, e.clientY);
+                if (p) heldTarget = clampOracle(p.x, p.z);
+                return;
+            }
+            if (pendingGrab) {
+                // Moved before the hold finished, so treat it as orbiting instead
+                if (Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y) > 8) {
+                    pendingGrab = false;
+                    clearTimeout(holdTimer);
+                    dragging = true;
+                    lastX = e.clientX; lastY = e.clientY;
+                }
+                return;
+            }
+            if (!dragging) {
+                // Show a pointer cursor when hovering over the oracle
+                sceneEl.style.cursor = pointOnOracle(e.clientX, e.clientY) ? 'pointer' : '';
+                return;
+            }
             orbit.theta = Math.max(-1.2, Math.min(1.2, orbit.theta - (e.clientX - lastX) * 0.005));
             orbit.phi = Math.max(0.5, Math.min(1.45, orbit.phi - (e.clientY - lastY) * 0.004));
             lastX = e.clientX; lastY = e.clientY;
         });
-        sceneEl.addEventListener('pointerup', () => dragging = false);
-        sceneEl.addEventListener('pointercancel', () => dragging = false);
+
+        function endPointer() {
+            clearTimeout(holdTimer);
+            pendingGrab = false;
+            dragging = false;
+            if (grabbing) endGrab();
+        }
+        sceneEl.addEventListener('pointerup', endPointer);
+        sceneEl.addEventListener('pointercancel', endPointer);
+
         sceneEl.addEventListener('wheel', e => {
             e.preventDefault();
             orbit.radius = Math.max(4, Math.min(16, orbit.radius + e.deltaY * 0.005));
@@ -1504,6 +1555,114 @@
             secretKeys[e.key.toLowerCase()] = false;
         });
 
+        // ================== GRAB AND MOVE THE ORACLE ==================
+        const raycaster = new THREE.Raycaster();
+        const pointerNDC = new THREE.Vector2();
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const groundHit = new THREE.Vector3();
+
+        function setPointerNDC(x, y) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointerNDC.x = ((x - rect.left) / rect.width) * 2 - 1;
+            pointerNDC.y = -((y - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointerNDC, camera);
+        }
+
+        function pointOnOracle(x, y) {
+            if (secretOpen || paint.active) return false;
+            setPointerNDC(x, y);
+            return raycaster.intersectObject(npc, true).length > 0;
+        }
+
+        function floorPointAt(x, y) {
+            setPointerNDC(x, y);
+            return raycaster.ray.intersectPlane(groundPlane, groundHit) ? groundHit : null;
+        }
+
+        // Keeps him inside the room, or lets him pass through the doorway into the garden
+        function clampOracle(x, z) {
+            const inDoorGap = z > -3.0 && z < -2.0;
+            if (x <= 3.4) {
+                // Inside the room
+                return { x: clampN(x, -3.4, 3.4), z: clampN(z, -5.4, -0.6) };
+            }
+            if (x < 4.6 && !inDoorGap) {
+                // Blocked by the wall, except at the doorway
+                return { x: 3.4, z: clampN(z, -5.4, -0.6) };
+            }
+            // Through the doorway and in the garden
+            return { x: clampN(x, 3.4, 16), z: clampN(z, -11, 4) };
+        }
+
+        function startGrab() {
+            pendingGrab = false;
+            grabbing = true;
+            // Stop any walk, sitting or painting so he can be moved freely
+            walking = false;
+            walkQueue = [];
+            walkDone = null;
+            seated = false;
+            outside = npcPos.x > 4.0;
+            updateSitBtn();
+            updateDoorBtn();
+            heldTarget = clampOracle(npcPos.x, npcPos.z);
+            npcSpeak(T("Hey! Put me down!", "এই! আমাকে নামাও!"));
+
+            // Giggle every couple of seconds while he is held
+            clearInterval(giggleTimer);
+            giggleTimer = setInterval(() => {
+                if (!grabbing) return;
+                const list = isBn() ? GIGGLES_BN : GIGGLES_EN;
+                showBubble(list[Math.floor(Math.random() * list.length)]);
+                setTimeout(() => { if (!talkingNow()) hideBubble(); }, 900);
+            }, 2200);
+        }
+
+        function endGrab() {
+            grabbing = false;
+            heldTarget = null;
+            clearInterval(giggleTimer);
+            outside = npcPos.x > 4.0;
+            updateDoorBtn();
+            updateSitBtn();
+            npcSpeak(T("Ahh, back on my feet!", "আহ, আবার মাটিতে!"));
+        }
+
+        function talkingNow() {
+            return clock.getElapsedTime() < talkUntil;
+        }
+
+        // Runs after the normal animation each frame, so the held pose overrides it
+        function applyHeldPose(t, dt) {
+            // Lift smoothly when grabbed, and set down smoothly when released
+            heldLift += ((grabbing ? 1 : 0) - heldLift) * Math.min(1, dt * 8);
+
+            if (grabbing && heldTarget) {
+                // Follow the mouse with a little lag so he feels floaty
+                const k = Math.min(1, dt * 10);
+                const dx = heldTarget.x - npcPos.x;
+                const dz = heldTarget.z - npcPos.z;
+                npcPos.x += dx * k;
+                npcPos.z += dz * k;
+                if (Math.hypot(dx, dz) > 0.05) faceAngle = Math.atan2(dx, dz);
+            }
+
+            if (!grabbing && heldLift < 0.01) return; // normal animation takes over
+
+            // Held pose: floating, arms waving, wiggling
+            const wiggle = Math.sin(t * 16) * heldLift;
+            npc.position.x = npcPos.x;
+            npc.position.z = npcPos.z;
+            npc.position.y = 0.15 + heldLift * 1.0 + Math.sin(t * 6) * 0.05 * heldLift;
+            npc.rotation.y = faceAngle + wiggle * 0.25;
+            npc.rotation.z = wiggle * 0.12;
+            leftArm.rotation.x = -2.2 + wiggle * 0.5;
+            rightArm.rotation.x = -2.2 - wiggle * 0.5;
+            leftArm.rotation.z = -0.4 * heldLift;
+            rightArm.rotation.z = 0.4 * heldLift;
+            mouth.scale.y = 1 + Math.abs(wiggle) * 3;
+        }
+
         // ---- Animation loop ----
         function animate() {
             requestAnimationFrame(animate);
@@ -1545,7 +1704,7 @@
             const talking = t < talkUntil || voiceSpeaking;
             const dancing = t < danceUntil;
             const funny = t < funnyUntil;
-            const powered = talking || mood === 'win' || dancing || funny || magic || painting;
+            const powered = talking || mood === 'win' || dancing || funny || magic || painting || grabbing;
 
             // Base position (follows the walk) and normal hover and sway
             npc.position.x = npcPos.x;
@@ -1590,7 +1749,7 @@
             const auraScale = powered ? 1.5 + Math.sin(t * 6) * 0.1 : 1 + Math.sin(t * 2) * 0.03;
             aura.scale.set(auraScale, auraScale, 1);
 
-            // Lightning when talking, winning, dancing, funny dancing, doing magic or painting
+            // Lightning when talking, winning, dancing, funny dancing, doing magic, painting or being held
             if (powered) {
                 if (t - lastBoltT > 0.09) {
                     jitterBolts();
@@ -1761,6 +1920,9 @@
             } else {
                 hatCone.rotation.z = funny ? hatCone.rotation.z : 0;
             }
+
+            // Held pose runs last, so being carried overrides the other movements
+            applyHeldPose(t, dt);
 
             // Render either the house or the secret chase, whichever is open
             if (secretOpen) {
